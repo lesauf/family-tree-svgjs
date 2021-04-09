@@ -1,27 +1,18 @@
 # FamilyTree
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 11.2.8.
+## Run
 
-## Development server
+ - npm i
+ - ng serve
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+## Info
 
-## Code scaffolding
+This is an example to render a simple family tree.
+It requires some improvement but overall it shows how you can render anything.
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+## SVGJS
 
-## Build
+It's using the amazing SVGJS library. You can find all the documentation there: https://svgjs.com/docs/3.0/
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
-
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via [Protractor](http://www.protractortest.org/).
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+To install SVGJS on your own angular application, add it to your package.json and don't forgot to add
+`"node_modules/@svgdotjs/svg.js/dist/svg.min.js"` to your angular.json config file (see angular.json#37 of this project)
