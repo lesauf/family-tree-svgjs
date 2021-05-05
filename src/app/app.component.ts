@@ -2,13 +2,13 @@ import { SVG } from '@svgdotjs/svg.js'
 import { Component, OnInit } from '@angular/core';
 
 interface Row {
-  members:Node[];
-  children?:Row;
+  members: Node[];
+  children?: Row;
 }
 
 interface Node {
-  label:string;
-  img:string;
+  label: string;
+  img: string;
 }
 
 @Component({
@@ -23,13 +23,13 @@ export class AppComponent implements OnInit {
   private X_SPACING = 100;
   private Y_SPACING = 120;
 
-  public ngOnInit():void {
-    this.renderTree(SVG().addTo('#canvas').size(800, 800), this.fakeTree(), 0);
+  public ngOnInit(): void {
+    this.renderTree(SVG().addTo('#canvas').size(500, 500), this.fakeTree(), 0);
   }
 
-  private renderTree(draw:any, tree:Row, y_index:number) {
+  private renderTree(draw: any, tree: Row, y_index: number) {
     console.log('render row > ', tree.members);
-    const rowSvgElements:any[] = []
+    const rowSvgElements: any[] = []
     tree.members.forEach((m, i) => {
       rowSvgElements.push(this.renderNode(draw, m, i, y_index, !!tree.children));
     });
@@ -41,7 +41,7 @@ export class AppComponent implements OnInit {
     }
   }
 
-  private renderNode(draw:any, node:Node, x_index:number, y_index:number, has_children:boolean): any {
+  private renderNode(draw: any, node: Node, x_index: number, y_index: number, has_children: boolean): any {
     const x_w = this.X_SPACING * x_index;
     const y_w = this.Y_SPACING * y_index;
     if (y_index > 0) {
@@ -63,13 +63,15 @@ export class AppComponent implements OnInit {
         .stroke({ color: '#000', width: 4 });
     }
     draw.plain(node.label).x(x_index + (this.NODE_RADIUS * x_index)).y(this.NODE_RADIUS * (y_index + 1) + ((this.Y_SPACING - this.NODE_RADIUS) * y_index));
+
     return draw.circle(this.NODE_RADIUS)
       .x(this.X_SPACING * x_index)
       .y(this.Y_SPACING * y_index)
-      .style(`background-image: url('${node.img}')`);
+      .fill(draw.image(node.img, 20, 20).size(100, 100).transform({ scale: 2 }));
+    // .style(`background-image: url('${node.img}')`);
   }
 
-  private drawRowConnector(draw:any, children_count:number, y_index:number): void {
+  private drawRowConnector(draw: any, children_count: number, y_index: number): void {
     // line connection of children lines
     draw.line(
       this.NODE_RADIUS / 2,
