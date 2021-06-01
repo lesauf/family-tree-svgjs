@@ -1,8 +1,10 @@
 import { AfterViewInit, Component, OnInit } from '@angular/core';
 import * as d3 from 'd3';
-import * as d3tip from 'd3-tip';
-import * as d3dag from 'd3-dag/dist';
+import 'd3-tip';
+import * as d3dag from 'd3-dag';
 import { data } from './data';
+import { LayoutDagRoot } from 'd3-dag/dist/dag/node';
+import { sugiyama, SugiyamaLayout, SugiyamaOperator } from 'd3-dag/dist/sugiyama';
 
 declare global {
   interface Array<T> {
@@ -38,7 +40,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   screen_width: any;
   screen_height: any;
   zoom: any;
-  tree: any;
+  tree: SugiyamaOperator<any>;
   dag: any;
   root: any;
   duration: any;
@@ -46,8 +48,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   svg: any;
   all_nodes: any;
   i: any;
-  x_sep: any;
-  y_sep: any;
+  x_sep: number;
+  y_sep: number;
 
   constructor() {}
 
@@ -79,7 +81,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     //   .direction('e')
     //   .offset([0, 5])
     //   .html(function (d) {
-    //     if (d.data.isUnion) return;
+    //     if (d.data.isUnion) return '';
     //     var content =
     //       `
     //               <span style='margin-left: 2.5px;'><b>` +
@@ -104,8 +106,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // append the svg object to the body of the page
     // assigns width and height
     // activates zoom/pan and tooltips
-    const svg = d3
-      .select('body')
+    this.svg = d3
+      .select('#graph')
       .append('svg')
       .attr('width', this.screen_width)
       .attr('height', this.screen_height)
@@ -113,23 +115,23 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // .call(tip);
 
     // append group element
-    this.g = svg.append('g');
+    this.g = this.svg.append('g');
 
     // helper variables
     (this.i = 0), (this.duration = 750), (this.x_sep = 120), (this.y_sep = 50);
 
     // declare a dag layout
-    this.tree = d3dag.sugiyama();
+    this.tree = sugiyama();
 
     this.tree
-      .nodeSize([this.y_sep, this.x_sep])
+      .nodeSize({sz: [this.y_sep, this.x_sep]})
       .layering(d3dag.layeringSimplex())
       .decross(d3dag.decrossOpt);
 
-    // this.tree.coord(d3dag.coordVert)
-    this.tree.separation((a: any, b: any) => {
-      return 1;
-    });
+    // this.tree.coord(d3dag.coordCenter); // .coordVert
+    // this.tree.separation((a: any, b: any) => {
+    //   return 1;
+    // });
 
     // make dag from edge list
     this.dag = d3dag.dagConnect()(data.links);
@@ -145,18 +147,21 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     }
 
     // prepare node data
+    console.log(this.dag);
     this.all_nodes = this.dag.descendants();
+    // console.log(this.all_nodes);
+
     this.all_nodes.forEach(
       (n: {
         data: any;
         id: string | number;
         _children: any;
-        children: never[];
-        inserted_nodes: never[];
-        inserted_roots: never[];
-        neighbors: never[];
+        children: any[];
+        inserted_nodes: any[];
+        inserted_roots: any[];
+        neighbors: any[];
         visible: boolean;
-        inserted_connections: never[];
+        inserted_connections: any[];
       }) => {
         n.data = data.persons[n.id] ? data.persons[n.id] : data.unions[n.id];
         n._children = n.children; // all nodes collapsed by default
@@ -169,8 +174,10 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       }
     );
 
+    console.log(this.all_nodes);
     // find root node and assign data
     this.root = this.all_nodes.find((n: { id: string }) => n.id == data.start);
+
     this.root.visible = true;
     this.root.neighbors = this.getNeighbors(this.root);
     this.root.x0 = this.screen_height / 2;
@@ -492,7 +499,9 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .attr('x', 13)
       .attr('text-anchor', 'start')
       .text(function (d: any) {
-        if (d.data.isUnion) return;
+        if (d.data.isUnion) {
+          return '';
+        }
         return (d.data.birthyear || '?') + ' - ' + (d.data.deathyear || '?');
       });
 
@@ -510,7 +519,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // Update the node attributes and style
     nodeUpdate
       .select('circle.node')
-      .attr('r', (d: any) => 10 * !d.data.isUnion + 0 * d.data.isUnion)
+      // .attr('r', (d: any) => 10 * !d.data.isUnion + 0 * d.data.isUnion)
       .style('fill', (d: any) => {
         return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
       })

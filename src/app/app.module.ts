@@ -10,6 +10,7 @@ import { DlacremeComponent } from './dlacreme/dlacreme.component';
 import { FamilyTreeComponent } from './family-tree/family-tree.component';
 import { BasicFamilyComponent } from './basic-family/basic-family.component';
 import { NgxGraphOrgTreeComponent } from './ngx-graph-org-tree/ngx-graph-org-tree.component';
+import { CssComponent } from './css/css.component';
 // import { BasicD3Component } from './basic-d3/basic-d3.component';
 
 @NgModule({
@@ -20,6 +21,7 @@ import { NgxGraphOrgTreeComponent } from './ngx-graph-org-tree/ngx-graph-org-tre
     FamilyTreeComponent,
     BasicFamilyComponent,
     NgxGraphOrgTreeComponent,
+    CssComponent,
     // BasicD3Component
   ],
   imports: [
