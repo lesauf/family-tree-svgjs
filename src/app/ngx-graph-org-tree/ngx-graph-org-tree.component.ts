@@ -4,7 +4,7 @@ import { DagreNodesOnlyLayout } from './customDagreNodesOnly';
 import { CustomDagre } from './custom-dagre';
 import * as shape from 'd3-shape';
 
-export class Employee {
+export class human {
   id: string;
   name: string;
   spouses?: string[];
@@ -19,7 +19,7 @@ export class Employee {
   styleUrls: ['./ngx-graph-org-tree.component.scss'],
 })
 export class NgxGraphOrgTreeComponent implements OnInit {
-  @Input() employees: Employee[] = [];
+  @Input() humans: human[] = [];
 
   public nodes: Node[] = [];
   public links: Edge[] = [];
@@ -33,7 +33,7 @@ export class NgxGraphOrgTreeComponent implements OnInit {
   // public layout: Layout = new CustomDagre();
 
   constructor() {
-    this.employees = [
+    this.humans = [
       {
         id: '1',
         name: 'Adam',
@@ -64,37 +64,37 @@ export class NgxGraphOrgTreeComponent implements OnInit {
   }
 
   public ngOnInit(): void {
-    for (const employee of this.employees) {
+    for (const human of this.humans) {
       const node: Node = {
-        id: employee.id,
-        label: employee.name,
+        id: human.id,
+        label: human.name,
         position: {
           x: 0,
           y: 0,
         },
         data: {
-          backgroundColor: employee.backgroundColor,
+          backgroundColor: human.backgroundColor,
         },
       };
 
       this.nodes.push(node);
 
-      if (employee.spouses) {
+      if (human.spouses) {
         const spousesCombIds = [];
         // Create hidden node for each spouses
-        for (let i = 0; i < employee.spouses.length; i++) {
+        for (let i = 0; i < human.spouses.length; i++) {
           const maxId = Math.max(
-            eval(employee.id + employee.spouses[i]),
-            eval(employee.spouses[i] + employee.id)
+            eval(human.id + human.spouses[i]),
+            eval(human.spouses[i] + human.id)
           );
           spousesCombIds.push(maxId.toString());
 
           const joint: Node = {
             id: `${maxId}`,
-            label: employee.name + '+ spouse',
+            label: human.name + '+ spouse',
             data: {
               hidden: true,
-              backgroundColor: employee.backgroundColor,
+              backgroundColor: human.backgroundColor,
             },
           };
 
@@ -106,14 +106,14 @@ export class NgxGraphOrgTreeComponent implements OnInit {
         }
 
         // Put Spouses in the same cluster
-        // const clusterId = [employee.id, ...employee.spouses, ...spousesCombIds]
+        // const clusterId = [human.id, ...human.spouses, ...spousesCombIds]
         //   .sort()
         //   .join('');
 
         // const cluster: ClusterNode = {
         //   id: clusterId,
         //   label: '',
-        //   childNodeIds: [employee.id, ...employee.spouses, ...spousesCombIds],
+        //   childNodeIds: [human.id, ...human.spouses, ...spousesCombIds],
         // };
 
         // if (this.clusters.find((c) => c.id === clusterId) === undefined) {
@@ -123,26 +123,26 @@ export class NgxGraphOrgTreeComponent implements OnInit {
     }
 
     // LINKS
-    for (const employee of this.employees) {
-      if (employee.spouses) {
-        for (let i = 0; i < employee.spouses.length; i++) {
+    for (const human of this.humans) {
+      if (human.spouses) {
+        for (let i = 0; i < human.spouses.length; i++) {
           const maxId = Math.max(
-            eval(employee.id + employee.spouses[i]),
-            eval(employee.spouses[i] + employee.id)
+            eval(human.id + human.spouses[i]),
+            eval(human.spouses[i] + human.id)
           );
 
           // Links between spouses
           const edge1: Edge = {
-            source: employee.id,
+            source: human.id,
             target: `${maxId}`,
-            // target: employee.spouses[i],
+            // target: human.spouses[i],
             label: '',
             data: {
               linkText: 'Manager of',
             },
           };
           const edge2: Edge = {
-            source: employee.spouses[i],
+            source: human.spouses[i],
             target: `${maxId}`,
             label: '',
             data: {
@@ -155,15 +155,15 @@ export class NgxGraphOrgTreeComponent implements OnInit {
       }
 
       // Links between parents and children
-      if (employee.parents) {
+      if (human.parents) {
         const maxId = Math.max(
-          eval(employee.parents[0] + employee.parents[1]),
-          eval(employee.parents[1] + employee.parents[0])
+          eval(human.parents[0] + human.parents[1]),
+          eval(human.parents[1] + human.parents[0])
         );
 
         const edge1: Edge = {
           source: `${maxId}`,
-          target: employee.id,
+          target: human.id,
           label: '',
           data: {
             linkText: 'Manager of',
@@ -171,7 +171,7 @@ export class NgxGraphOrgTreeComponent implements OnInit {
         };
         const edge2: Edge = {
           source: `${maxId}`,
-          target: employee.id,
+          target: human.id,
           label: '',
           data: {
             linkText: 'Manager of',
@@ -181,13 +181,13 @@ export class NgxGraphOrgTreeComponent implements OnInit {
         this.links.push(edge2);
       }
 
-      if (!employee.upperManagerId) {
+      if (!human.upperManagerId) {
         continue;
       }
 
       // const edge: Edge = {
-      //   source: employee.upperManagerId,
-      //   target: employee.id,
+      //   source: human.upperManagerId,
+      //   target: human.id,
       //   label: '',
       //   data: {
       //     linkText: 'Manager of',
