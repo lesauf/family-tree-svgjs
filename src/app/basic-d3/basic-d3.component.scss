@@ -4,6 +4,13 @@ body {
   overflow: hidden;
 }
 
+.node rect {
+  fill: #fff;
+  fill-opacity: 0.1;
+  stroke: steelblue;
+  stroke-width: 1px;
+}
+
 .node circle {
   fill: #fff;
   stroke: steelblue;

@@ -13,14 +13,10 @@ import {
   DagNode,
   DagRoot,
   LayoutChildLink,
+  LayoutDagNode,
   LayoutDagRoot,
+  LayoutLink,
 } from 'd3-dag/dist/dag/node';
-import {
-  sugiyama,
-  SugiyamaLayout,
-  SugiyamaOperator,
-} from 'd3-dag/dist/sugiyama';
-import { ConnectDatum } from 'd3-dag/dist/dag/connect';
 
 const d3 = Object.assign({}, d3_base, d3dag);
 
@@ -55,28 +51,48 @@ export type LinkDatum = {
   points: any[];
 };
 
-export type Node = {
-  data: {
-    id: string | number;
-    birthplace: string;
-    birthyear: number;
-    deathplace: string;
-    deathyear: number;
-    name: string;
-    own_unions: any[];
-    parent_union: string;
-    isUnion: boolean;
-  };
-  // dataChildren: any[];
-  dataChildren: LinkDatum[];
-  children: LinkDatum[];
-  height: any;
-  inserted_nodes: Node[];
-  inserted_roots: Node[];
-  neighbors: Node[];
-  visible: boolean;
-  inserted_connections: any[];
+export type NodeData = {
+  id: string;
+  birthplace?: string;
+  birthyear?: number;
+  deathplace?: string;
+  deathyear?: number;
+  name?: string;
+  own_unions?: any[];
+  parent_union?: string;
+  isUnion?: boolean;
 };
+
+export type Coordinates = {
+  x?: number;
+  x0?: number;
+  y?: number;
+  y0?: number;
+};
+
+export type Node = LayoutDagNode<NodeData, string[]> & Coordinates;
+// {
+//   data: {
+//     id: string | number;
+//     birthplace: string;
+//     birthyear: number;
+//     deathplace: string;
+//     deathyear: number;
+//     name: string;
+//     own_unions: any[];
+//     parent_union: string;
+//     isUnion: boolean;
+//   };
+//   // dataChildren: any[];
+//   dataChildren: LinkDatum[];
+//   children: LinkDatum[];
+//   height: any;
+//   inserted_nodes: any[];
+//   inserted_roots: Node[];
+//   neighbors: any[];
+//   visible: boolean;
+//   inserted_connections: any[];
+// };
 
 @Component({
   selector: 'app-basic-d3',
@@ -89,15 +105,20 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   screen_height: any;
   zoom: any;
   tree: any;
-  dag: Dag<DagNode<ConnectDatum, string[]>>;
+  dag: Dag<DagNode<NodeData, string[]>>;
   root: any;
-  duration: any;
   g: any;
   svg: any;
-  all_nodes: any[];
-  i: any;
-  x_sep: number;
-  y_sep: number;
+  all_nodes: LayoutDagNode<NodeData, string[]>[];
+  // helper variables
+  i = 0;
+  duration = 750;
+  x_sep = 120;
+  y_sep = 50;
+  marginAroundNodes: number = 5;
+  marginAfter;
+  unionYSep = 50;
+  unionXSep = 100;
 
   constructor() {}
 
@@ -133,39 +154,29 @@ export class BasicD3Component implements AfterViewInit, OnInit {
 
     // append group element
     this.g = this.svg.append('g');
-    // helper variables
-    this.i = 0;
-    this.duration = 750;
-    this.x_sep = 120;
-    this.y_sep = 50;
 
-    // declare a dag layout
-    this.tree = d3.sugiyama().nodeSize((node) => [this.y_sep, this.x_sep]);
-
-    this.tree
-      // .nodeSize([this.y_sep, this.x_sep]);
-      // .size([this.y_sep, this.x_sep])
+    // declare a dag layout and define the size of each node
+    this.tree = d3
+      .sugiyama()
+      .nodeSize((node: Node) => {
+        if (node.data && node.data.isUnion) {
+          return [this.unionYSep, this.unionXSep];
+        } else {
+          return [
+            this.y_sep + this.marginAroundNodes,
+            this.x_sep + this.marginAroundNodes,
+          ];
+        }
+      })
       .layering(d3.layeringSimplex())
-      .decross(d3.decrossOpt)
-      .coord(d3.coordQuad); // .coordVert
-    // this.tree.separation((a: any, b: any) => {
-    //   return 1;
-    // });
+      .decross(d3.decrossOpt())
+      .coord(d3.coordQuad());
+
+    // this.tree;
 
     // make dag from edge list
     this.dag = d3.dagConnect()(data.links);
 
-    console.log('DAG:', this.dag);
-
-    // in order to make the family tree work, the dag
-    // must be a node with id undefined. create that node if
-    // not done automaticaly
-    // if (this.dag.data.id != undefined) {
-    //   this.root = this.dag.copy();
-    //   this.root.data.id = undefined;
-    //   this.root.children = [this.dag];
-    //   this.dag = this.root;
-    // }
     // Populate node data
     this.all_nodes = this.dag.descendants();
     this.all_nodes = this.all_nodes.map((n: Node) => {
@@ -174,18 +185,17 @@ export class BasicD3Component implements AfterViewInit, OnInit {
         : data.unions[n.data.id];
       // n.dataChildren = n.children; // all nodes collapsed by default
       // n.dataChildren = [];
-      n.children = [];
-      n.inserted_nodes = [];
-      n.inserted_roots = [];
-      n.neighbors = [];
-      n.visible = false;
-      n.inserted_connections = [];
+      // n.children = [];
+      // n.inserted_nodes = [];
+      // n.inserted_roots = [];
+      // n.neighbors = [];
+      // n.visible = true;
+      // n.inserted_connections = [];
       // n.height = 10;
 
       return n;
     });
 
-    console.log('ALL_NODES: ', this.all_nodes);
     // find root node and assign data
     this.root = this.all_nodes.find(
       (n: { data: { id: string } }) => n.data.id == data.start
@@ -196,165 +206,14 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     this.root.x0 = this.screen_height / 2;
     this.root.y0 = this.screen_width / 2;
     // overwrite dag root nodes to set only one
-    this.dag['dagRoots'] = [this.root];
+    // this.dag['dagRoots'] = [this.root];
 
     // draw dag
     this.update(this.root);
     // this.update(this.dag);
   }
 
-  // collapse a node
-  collapse(d: Node) {
-    // remove root nodes and circle-connections
-    var remove_inserted_root_nodes = (n: Node) => {
-      // remove all inserted root nodes
-      this.dag['dagRoots'] = this.dag['dagRoots'].filter(
-        (c: Node) =>
-          n.inserted_roots.find((r) => c.data.id === r.data.id) === undefined
-      );
-
-      // remove inserted connections
-      n.inserted_connections.forEach((arr: [LinkDatum, LinkDatum]) => {
-        // check existence to prevent double entries
-        // which will cause crashes
-        console.log('EXIST', arr[0]);
-        const connectionExist = arr[0].child.children.find(
-          (c) => arr[1].child.data.id === c.child.data.id
-        );
-
-        // if (arr[0].children.includes(arr[1])) {
-        if (connectionExist) {
-          arr[0].child.dataChildren.push(arr[1]);
-          arr[0].child.children.remove(arr[1]);
-        }
-      });
-      // repeat for all inserted nodes
-      n.inserted_nodes.forEach(remove_inserted_root_nodes);
-    };
-    remove_inserted_root_nodes(d);
-
-    // collapse neighbors which are visible and have been inserted by this node
-    var vis_inserted_neighbors = d.neighbors.filter((n: Node) => {
-      const isInserted = d.inserted_nodes.find(
-        (a: Node) => a.data.id === n.data.id
-      );
-
-      return n.visible && isInserted;
-      // d.inserted_nodes.includes(n)
-    });
-    vis_inserted_neighbors.forEach((n: any) => {
-      // tag invisible
-      n.visible = false;
-      // if child, delete connection
-      if (d.children.includes(n)) {
-        d.dataChildren.push(n);
-        d.children.remove(n);
-      }
-      // if parent, delete connection
-      if (n.children.includes(d)) {
-        n.dataChildren.push(d);
-        n.children.remove(d);
-      }
-      // if union, collapse the union
-      if (n.data.isUnion) {
-        this.collapse(n);
-      }
-      // remove neighbor handle from clicked node
-      d.inserted_nodes.remove(n);
-    });
-  }
-
-  // uncollapse a node
-  uncollapse(d: Node, make_roots = false) {
-    if (d === undefined) return;
-
-    // neighbor nodes that are already visible (happens when
-    // circles occur): make connections, save them to
-    // destroy / rebuild on collapse
-    let extended_neighbors = d.neighbors.filter((n: any) => n.visible);
-    extended_neighbors.forEach((n: any) => {
-      // if child, make connection
-      const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
-      if (isChild) {
-        d.inserted_connections.push([d, n]);
-      }
-      // if parent, make connection
-      const isParent = n.dataChildren.find(
-        (c) => d.data.id === c.child.data.id
-      );
-      if (isParent) {
-        d.inserted_connections.push([n, d]);
-      }
-    });
-
-    // neighbor nodes that are invisible: make visible, make connections,
-    // add root nodes, add to inserted_nodes
-    let collapsed_neighbors = d.neighbors.filter((n: any) => !n.visible);
-
-    collapsed_neighbors.forEach((n, index: number) => {
-      // collect neighbor data
-      n.neighbors = this.getNeighbors(n);
-
-      // tag visible
-      n.visible = true;
-
-      // if child, make connection
-      const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
-      if (isChild) {
-        // d.children.push(n);
-        d.children.push(isChild);
-        d.dataChildren.remove(n);
-      }
-
-      // if parent, make connection
-      const isParent = n.dataChildren.find(
-        (c) => d.data.id === c.child.data.id
-      );
-      if (isParent) {
-        n.children.push(isParent);
-        n.dataChildren.remove(d);
-        // insert root nodes if flag is set
-        if (make_roots && !d.inserted_roots.includes(n)) {
-          d.inserted_roots.push(n);
-        }
-      }
-      // if union, uncollapse the union
-      if (n.data.isUnion) {
-        this.uncollapse(n, true);
-      }
-      // save neighbor handle in clicked node
-      d.inserted_nodes.push(n);
-
-      collapsed_neighbors[index] = n; // ??
-    });
-
-    // make sure this step is done only once
-    if (!make_roots) {
-      var add_root_nodes = (n: any) => {
-        // add previously inserted root nodes (partners, parents)
-        n.inserted_roots.forEach((p: any) => this.dag['dagRoots'].push(p));
-
-        // add previously inserted connections (circles)
-        n.inserted_connections.forEach((arr: any) => {
-          // check existence to prevent double entries
-          // which will cause crashes
-          if (arr[0].dataChildren.includes(arr[1])) {
-            arr[0].children.push(arr[1]);
-            arr[0].dataChildren.remove(arr[1]);
-          }
-        });
-        // repeat with all inserted nodes
-        n.inserted_nodes.forEach(add_root_nodes);
-      };
-      add_root_nodes(d);
-    }
-  }
-
-  is_extendable(node: Node) {
-    return node.neighbors.filter((n: any) => !n.visible).length > 0;
-  }
-
-  getNeighbors(node: any) {
+  getNeighbors(node: Node) {
     if (node.data.isUnion) {
       return this.getChildren(node).concat(this.getPartners(node));
     } else {
@@ -362,9 +221,11 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     }
   }
 
-  getParentUnions(node: any) {
-    if (node == undefined) return [];
-    if (node.data.isUnion) return [];
+  getParentUnions(node: Node) {
+    if (node === undefined || node.data.isUnion) {
+      return [];
+    }
+
     var u_id = node.data.parent_union;
     if (u_id) {
       var union = this.all_nodes.find((n: any) => n.data.id == u_id);
@@ -413,20 +274,25 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   }
 
   getOwnUnions(node: Node) {
-    if (node.data.isUnion) return [];
+    if (node.data.isUnion) {
+      return [];
+    }
+
     let unions: any = [];
     node.data.own_unions.forEach((u_id: any) =>
       unions.push(this.all_nodes.find((n: any) => n.data.id == u_id))
     );
-    return unions.filter((u: any) => u != undefined);
+
+    return unions.filter((u: any) => u !== undefined);
   }
 
-  getChildren(node: Node) {
-    let children: any = [];
+  getChildren(node: any): LinkDatum[] {
+    let children: LinkDatum[] = [];
     if (!node.data.isUnion) {
       children = node.children.concat(node.dataChildren);
     } else {
       let own_unions = this.getOwnUnions(node);
+
       own_unions.forEach(
         (u: any) => (children = children.concat(this.getChildren(u)))
       );
@@ -434,13 +300,17 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // sort children by birth year, filter undefined
     children = children
       .filter((c: any) => c != undefined)
-      .sort((a: any, b: any) =>
-        Math.sign((this.getBirthYear(a) || 0) - (this.getBirthYear(b) || 0))
+      .sort((a: LinkDatum, b: LinkDatum) =>
+        Math.sign(
+          (this.getBirthYear(a.child) || 0) - (this.getBirthYear(b.child) || 0)
+        )
       );
+
+    console.log('OWN_UNIONS', children);
     return children;
   }
 
-  getBirthYear(node: any) {
+  getBirthYear(node: Node) {
     return new Date(node.data.birthyear || NaN).getFullYear();
   }
 
@@ -476,40 +346,55 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     let nodes = this.dag.descendants();
     let links = this.dag.links();
 
-    // console.log('NODES', nodes);
-
-    // ****************** Nodes section ***************************
+    // *********************************************
+    //             Node section
+    // *********************************************
 
     // Creates a curved (diagonal) path from parent to the child nodes
-    function diagonal(s: any, d: any) {
-      let path = `M ${s.y} ${s.x}
-        C ${(s.y + d.y) / 2} ${s.x},
-          ${(s.y + d.y) / 2} ${d.x},
-          ${d.y} ${d.x}`;
+    let diagonal = (s: Node | Coordinates, d: Node | Coordinates) => {
+      // By default the link start from the moddle of the node/union
+      let sourceX = s.x;
+      let sourceY = s.y;
+      let destX = d.x;
+      let destY = d.y;
 
-      return path;
-    }
-
-    // Toggle unions, children, partners on click.
-    let click = (event: any, d: any) => {
-      // do nothing if node is union
-      if (d.data.isUnion) return;
-
-      // uncollapse if there are uncollapsed unions / children / partners
-      if (this.is_extendable(d)) {
-        this.uncollapse(d);
-      } else {
-        // collapse if fully uncollapsed
-        this.collapse(d);
+      if (s.hasOwnProperty('data') && !s['data']['isUnion']) {
+        // for starting node add a margin to the left
+        sourceX = s.x;
+        sourceY = s.y + this.y_sep + this.marginAroundNodes * 6;
+      }
+      if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
+        // for destination node add a margin to the right
+        destX = d.x;
+        destY = d.y - this.y_sep + this.marginAroundNodes * 2;
       }
 
-      this.update(d);
+      let path = `M ${sourceY} ${sourceX}
+        C ${(sourceY + destY) / 2} ${sourceX},
+          ${(sourceY + destY) / 2} ${destX},
+          ${destY} ${destX}`;
+
+      return path;
+    };
+
+    // Toggle unions, children, partners on click.
+    let click = (event: any, d: Node) => {
+      // do nothing if node is union
+      if (d.data.isUnion) return;
+      // // uncollapse if there are uncollapsed unions / children / partners
+      // if (this.is_extendable(d)) {
+      //   this.uncollapse(d);
+      // } else {
+      //   // collapse if fully uncollapsed
+      //   this.collapse(d);
+      // }
+      // this.update(d);
+
+      console.log(d);
     };
 
     // Update the nodes...
     let node = this.g.selectAll('g.node').data(nodes, (d: any) => {
-      // console.log('I', (d.data.id = this.i));
-
       if (!d.data.id) {
         this.i = this.i + 1;
         d.data.id = this.i;
@@ -532,29 +417,49 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       // .on('mouseout', tip.hide)
       .attr('visible', true);
 
-    // Add Circle for the nodes
+    // Add Rectangle for the nodes
     nodeEnter
-      .append('circle')
+      .append('rect')
       .attr('class', 'node')
-      .attr('r', 10)
-      .style('fill', (d: any) => {
-        return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
-      });
+      .attr('x', -(this.x_sep / 3))
+      .attr('y', -(this.y_sep / 2))
+      .attr('width', (d: Node) =>
+        d.data.isUnion ? this.unionXSep : this.x_sep
+      )
+      .attr('height', (d: Node) =>
+        d.data.isUnion ? this.unionYSep : this.y_sep
+      );
+    // .style('fill', 'red');
+    // .style('fill', (d: any) => {
+    //   return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
+    // });
+
+    // Add Circle for the nodes
+    // nodeEnter
+    //   .append('circle')
+    //   .attr('class', 'node')
+    //   .attr('r', 10)
+    //   .style('fill', '#fff');
+    // .style('fill', (d: any) => {
+    //   return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
+    // });
 
     // Add names as node labels
     nodeEnter
       .append('text')
-      .attr('dy', '-2')
+      .attr('dy', '-5')
       .attr('x', 13)
+      .attr('dx', -(this.x_sep / 3))
       .attr('text-anchor', 'start')
       .text((d: any) => d.data.name);
     // add birth date and death date as labels
     nodeEnter
       .append('text')
-      .attr('dy', '10')
+      .attr('dy', '15')
       .attr('x', 13)
+      .attr('dx', -(this.x_sep / 3))
       .attr('text-anchor', 'start')
-      .text(function (d: any) {
+      .text(function (d: Node) {
         if (d.data.isUnion) {
           return '';
         }
@@ -572,11 +477,16 @@ export class BasicD3Component implements AfterViewInit, OnInit {
         return 'translate(' + d.y + ',' + d.x + ')';
       });
 
-    // Update the node attributes and style
+    // Hide the union nodes
     nodeUpdate
       .select('circle.node')
-      // .attr('r', (d: any) => 10 * !d.data.isUnion + 0 * d.data.isUnion)
-
+      .attr('r', (d: Node) => (d.data.isUnion ? 0 : 10))
+      .attr('cursor', 'pointer');
+    nodeUpdate
+      .select('rect.node')
+      .attr('width', (d: Node, i: any, nodes: any) => {
+        return d.data.isUnion ? 0 : this.x_sep;
+      })
       .attr('cursor', 'pointer');
 
     // Remove any exiting nodes
@@ -596,7 +506,9 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // On exit reduce the opacity of text labels
     nodeExit.select('text').style('fill-opacity', 1e-6);
 
-    // ****************** links section ***************************
+    // *********************************************
+    //             links section
+    // *********************************************
 
     // Update the links...
     var link = this.g.selectAll('path.link').data(links, function (d: any) {
@@ -608,8 +520,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .enter()
       .insert('path', 'g')
       .attr('class', 'link')
-      .attr('d', function (d: any) {
-        var o = { x: source.x0, y: source.y0 };
+      .attr('d', (d: any) => {
+        let o = { x: source.x0, y: source.y0 };
         return diagonal(o, o);
       });
 
@@ -620,7 +532,9 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     linkUpdate
       .transition()
       .duration(this.duration)
-      .attr('d', (d: any) => diagonal(d.source, d.target));
+      .attr('d', (d: LayoutLink<Node>) => {
+        return diagonal(d.source, d.target);
+      });
 
     // Remove any exiting links
     var linkExit = link
@@ -651,4 +565,154 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       d.y0 = d.y;
     });
   }
+
+  // collapse a node
+  // collapse(d: Node) {
+  //   // remove root nodes and circle-connections
+  //   var remove_inserted_root_nodes = (n: Node) => {
+  //     // remove all inserted root nodes
+  //     this.dag['dagRoots'] = this.dag['dagRoots'].filter(
+  //       (c: Node) =>
+  //         n.inserted_roots.find((r) => c.data.id === r.data.id) === undefined
+  //     );
+
+  //     // remove inserted connections
+  //     n.inserted_connections.forEach((arr: [LinkDatum, LinkDatum]) => {
+  //       // check existence to prevent double entries
+  //       // which will cause crashes
+  //       const connectionExist = arr[0].child.children.find(
+  //         (c) => arr[1].child.data.id === c.child.data.id
+  //       );
+
+  //       // if (arr[0].children.includes(arr[1])) {
+  //       if (connectionExist) {
+  //         arr[0].child.dataChildren.push(arr[1]);
+  //         arr[0].child.children.remove(arr[1]);
+  //       }
+  //     });
+  //     // repeat for all inserted nodes
+  //     n.inserted_nodes.forEach(remove_inserted_root_nodes);
+  //   };
+  //   remove_inserted_root_nodes(d);
+
+  //   // collapse neighbors which are visible and have been inserted by this node
+  //   var vis_inserted_neighbors = d.neighbors.filter((n: Node) => {
+  //     const isInserted = d.inserted_nodes.find(
+  //       (a: Node) => a.data.id === n.data.id
+  //     );
+
+  //     return n.visible && isInserted;
+  //     // d.inserted_nodes.includes(n)
+  //   });
+  //   vis_inserted_neighbors.forEach((n: any) => {
+  //     // tag invisible
+  //     n.visible = false;
+  //     // if child, delete connection
+  //     if (d.children.includes(n)) {
+  //       d.dataChildren.push(n);
+  //       d.children.remove(n);
+  //     }
+  //     // if parent, delete connection
+  //     if (n.children.includes(d)) {
+  //       n.dataChildren.push(d);
+  //       n.children.remove(d);
+  //     }
+  //     // if union, collapse the union
+  //     if (n.data.isUnion) {
+  //       this.collapse(n);
+  //     }
+  //     // remove neighbor handle from clicked node
+  //     d.inserted_nodes.remove(n);
+  //   });
+  // }
+
+  // // uncollapse a node
+  // uncollapse(d: Node, make_roots = false) {
+  //   if (d === undefined) return;
+
+  //   // neighbor nodes that are already visible (happens when
+  //   // circles occur): make connections, save them to
+  //   // destroy / rebuild on collapse
+  //   let extended_neighbors = d.neighbors.filter((n: any) => n.visible);
+  //   extended_neighbors.forEach((n: any) => {
+  //     // if child, make connection
+  //     const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
+  //     if (isChild) {
+  //       d.inserted_connections.push([d, n]);
+  //     }
+  //     // if parent, make connection
+  //     const isParent = n.dataChildren.find(
+  //       (c) => d.data.id === c.child.data.id
+  //     );
+  //     if (isParent) {
+  //       d.inserted_connections.push([n, d]);
+  //     }
+  //   });
+
+  //   // neighbor nodes that are invisible: make visible, make connections,
+  //   // add root nodes, add to inserted_nodes
+  //   let collapsed_neighbors = d.neighbors.filter((n: any) => !n.visible);
+
+  //   collapsed_neighbors.forEach((n, index: number) => {
+  //     // collect neighbor data
+  //     n.neighbors = this.getNeighbors(n);
+
+  //     // tag visible
+  //     n.visible = true;
+
+  //     // if child, make connection
+  //     const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
+  //     if (isChild) {
+  //       // d.children.push(n);
+  //       d.children.push(isChild);
+  //       d.dataChildren.remove(n);
+  //     }
+
+  //     // if parent, make connection
+  //     const isParent = n.dataChildren.find(
+  //       (c) => d.data.id === c.child.data.id
+  //     );
+  //     if (isParent) {
+  //       n.children.push(isParent);
+  //       n.dataChildren.remove(d);
+  //       // insert root nodes if flag is set
+  //       if (make_roots && !d.inserted_roots.includes(n)) {
+  //         d.inserted_roots.push(n);
+  //       }
+  //     }
+  //     // if union, uncollapse the union
+  //     if (n.data.isUnion) {
+  //       this.uncollapse(n, true);
+  //     }
+  //     // save neighbor handle in clicked node
+  //     d.inserted_nodes.push(n);
+
+  //     collapsed_neighbors[index] = n; // ??
+  //   });
+
+  //   // make sure this step is done only once
+  //   if (!make_roots) {
+  //     var add_root_nodes = (n: any) => {
+  //       // add previously inserted root nodes (partners, parents)
+  //       n.inserted_roots.forEach((p: any) => this.dag['dagRoots'].push(p));
+
+  //       // add previously inserted connections (circles)
+  //       n.inserted_connections.forEach((arr: any) => {
+  //         // check existence to prevent double entries
+  //         // which will cause crashes
+  //         if (arr[0].dataChildren.includes(arr[1])) {
+  //           arr[0].children.push(arr[1]);
+  //           arr[0].dataChildren.remove(arr[1]);
+  //         }
+  //       });
+  //       // repeat with all inserted nodes
+  //       n.inserted_nodes.forEach(add_root_nodes);
+  //     };
+  //     add_root_nodes(d);
+  //   }
+  // }
+
+  // is_extendable(node: Node) {
+  //   return node.neighbors.filter((n: any) => !n.visible).length > 0;
+  // }
 }

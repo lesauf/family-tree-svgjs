@@ -101,6 +101,12 @@ export const data = {
       own_unions: [],
       parent_union: 'u5',
     },
+    id13: {
+      id: 'id13',
+      name: 'DanWife',
+      birthYear: 1980,
+      ownUnions: ['u6'],
+    },
   },
   unions: {
     u1: {
@@ -128,6 +134,11 @@ export const data = {
       partner: ['id8'],
       children: ['id12'],
     },
+    u6: {
+      id: 'u6',
+      partner: ['id4', 'id13'],
+      children: [],
+    },
   },
   links: [
     ['id1', 'u1'],
@@ -146,5 +157,7 @@ export const data = {
     ['u1', 'id11'],
     ['id8', 'u5'],
     ['u5', 'id12'],
+    ['id13', 'u6'],
+    ['id4', 'u6'],
   ],
 };
