@@ -17,6 +17,7 @@ import {
   LayoutDagRoot,
   LayoutLink,
 } from 'd3-dag/dist/dag/node';
+import { SugiyamaOperator } from 'd3-dag';
 
 const d3 = Object.assign({}, d3_base, d3dag);
 
@@ -104,7 +105,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   screen_width: any;
   screen_height: any;
   zoom: any;
-  tree: any;
+  layout: SugiyamaOperator<any>;
   dag: Dag<DagNode<NodeData, string[]>>;
   root: any;
   g: any;
@@ -115,7 +116,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   duration = 750;
   x_sep = 120;
   y_sep = 50;
-  marginAroundNodes: number = 5;
+  marginAroundNodes: number = 15;
   marginAfter;
   unionYSep = 50;
   unionXSep = 100;
@@ -156,15 +157,17 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     this.g = this.svg.append('g');
 
     // declare a dag layout and define the size of each node
-    this.tree = d3
+    this.layout = d3
       .sugiyama()
       .nodeSize((node: Node) => {
         if (node.data && node.data.isUnion) {
-          return [this.unionYSep, this.unionXSep];
+          // Here
+          return [this.unionXSep, this.unionYSep];
         } else {
+          // Here set the dimensions of each node
           return [
-            this.y_sep + this.marginAroundNodes,
             this.x_sep + this.marginAroundNodes,
+            this.y_sep + this.marginAroundNodes,
           ];
         }
       })
@@ -172,7 +175,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .decross(d3.decrossOpt())
       .coord(d3.coordQuad());
 
-    // this.tree;
+    // this.layout;
 
     // make dag from edge list
     this.dag = d3.dagConnect()(data.links);
@@ -341,8 +344,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
 
   update(source: any) {
     // Assigns the x and y position for the nodes
-    let dag_tree = this.tree(this.dag);
-    // console.log('TREE', dag_tree);
+    let dag_tree = this.layout(this.dag);
+
     let nodes = this.dag.descendants();
     let links = this.dag.links();
 
@@ -357,22 +360,35 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       let sourceY = s.y;
       let destX = d.x;
       let destY = d.y;
+      let path: string;
 
       if (s.hasOwnProperty('data') && !s['data']['isUnion']) {
-        // for starting node add a margin to the left
-        sourceX = s.x;
-        sourceY = s.y + this.y_sep + this.marginAroundNodes * 6;
+        // for starting node add a margin to the top
+        sourceX = s.x + this.x_sep / 10 + this.marginAroundNodes;
+        sourceY = s.y;
+
+        // Angular lines
+        path = `M ${sourceY} ${sourceX}
+                L ${sourceY} ${destX}
+                  ${destY} ${destX}`;
       }
       if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
-        // for destination node add a margin to the right
-        destX = d.x;
-        destY = d.y - this.y_sep + this.marginAroundNodes * 2;
+        // for destination node add a margin to the bottom
+        destX = d.x - this.x_sep / 10 - this.marginAroundNodes;
+        destY = d.y;
+
+        // Angular lines
+        path = `M ${sourceY} ${sourceX}
+                L ${destY} ${sourceX}
+                  ${destY} ${destX}`;
       }
 
-      let path = `M ${sourceY} ${sourceX}
-        C ${(sourceY + destY) / 2} ${sourceX},
-          ${(sourceY + destY) / 2} ${destX},
-          ${destY} ${destX}`;
+      // Curved lines
+      // let path = `M ${sourceY} ${sourceX}
+      //   C ${(sourceY + destY) / 2} ${sourceX},
+      //     ${(sourceY + destY) / 2} ${destX},
+      //     ${destY} ${destX}`;
+      // ,
 
       return path;
     };
@@ -389,16 +405,19 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       //   this.collapse(d);
       // }
       // this.update(d);
-
-      console.log(d);
     };
 
     // Update the nodes...
-    let node = this.g.selectAll('g.node').data(nodes, (d: any) => {
+    let node = this.g.selectAll('g.node').data(nodes, (d: any, index) => {
       if (!d.data.id) {
         this.i = this.i + 1;
         d.data.id = this.i;
       }
+
+      // Swap coordinates to make the graph vertical
+      const tempX = d.x;
+      d.x = d.y;
+      d.y = tempX;
 
       return d.data.id;
       // return d.data.id || (d.data.id = this.i);
@@ -410,7 +429,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .append('g')
       .attr('class', 'node')
       .attr('transform', (d: any) => {
-        return 'translate(' + source.y0 + ',' + source.x0 + ')';
+        return 'translate(' + d.y + ',' + d.x + ')';
       })
       .on('click', click)
       // .on('mouseover', tip.show)
@@ -421,7 +440,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     nodeEnter
       .append('rect')
       .attr('class', 'node')
-      .attr('x', -(this.x_sep / 3))
+      .attr('x', -(this.x_sep / 2))
       .attr('y', -(this.y_sep / 2))
       .attr('width', (d: Node) =>
         d.data.isUnion ? this.unionXSep : this.x_sep
@@ -440,9 +459,9 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     //   .attr('class', 'node')
     //   .attr('r', 10)
     //   .style('fill', '#fff');
-    // .style('fill', (d: any) => {
-    //   return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
-    // });
+    // // .style('fill', (d: any) => {
+    // //   return this.is_extendable(d) ? 'lightsteelblue' : '#fff';
+    // // });
 
     // Add names as node labels
     nodeEnter
@@ -470,21 +489,22 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     var nodeUpdate = nodeEnter.merge(node);
 
     // Transition to the proper position for the node
-    nodeUpdate
-      .transition()
-      .duration(this.duration)
-      .attr('transform', function (d: any) {
-        return 'translate(' + d.y + ',' + d.x + ')';
-      });
+    // nodeUpdate
+    //   .transition()
+    //   .duration(this.duration)
+    //   .attr('transform', function (d: any) {
+    //     return 'translate(' + d.y + ',' + d.x + ')';
+    //   });
 
     // Hide the union nodes
     nodeUpdate
       .select('circle.node')
-      .attr('r', (d: Node) => (d.data.isUnion ? 0 : 10))
+      .attr('r', (d: Node) => (d.data.isUnion ? 10 : 10)) // (d.data.isUnion ? 0 : 10))
       .attr('cursor', 'pointer');
     nodeUpdate
       .select('rect.node')
       .attr('width', (d: Node, i: any, nodes: any) => {
+        // return d.data.isUnion ? 0 : this.x_sep;
         return d.data.isUnion ? 0 : this.x_sep;
       })
       .attr('cursor', 'pointer');

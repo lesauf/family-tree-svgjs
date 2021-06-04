@@ -12,7 +12,7 @@ import { NgxGraphOrgTreeComponent } from './ngx-graph-org-tree/ngx-graph-org-tre
 const routes: Routes = [
   {
     path: '',
-    component: FamilyTreeComponent,
+    component: BasicD3Component,
   },
   {
     path: 'css',
@@ -23,8 +23,8 @@ const routes: Routes = [
     component: CssFtComponent,
   },
   {
-    path: 'd3',
-    component: BasicD3Component,
+    path: 'family',
+    component: FamilyTreeComponent,
   },
   {
     path: 'basic',
