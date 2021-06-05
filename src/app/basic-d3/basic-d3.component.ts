@@ -18,6 +18,7 @@ import {
   LayoutLink,
 } from 'd3-dag/dist/dag/node';
 import { SugiyamaOperator } from 'd3-dag';
+import { merge } from 'rxjs';
 
 const d3 = Object.assign({}, d3_base, d3dag);
 
@@ -206,22 +207,74 @@ export class BasicD3Component implements AfterViewInit, OnInit {
    * @param dag
    */
   decrossCouples(dag: Node[][]) {
-    for (let i = 0; i < dag.length; i++) {
-      const row = dag[i];
-      row.sort((d1: Node, d2: Node) => {
-        if (
-          d1.data?.own_unions?.sort().join() ===
-          d2.data?.own_unions?.sort().join()
-        ) {
-          // Group couples of the same family
-          return 1;
-        } else {
-          return -1;
-        }
-      });
-    }
-
     console.log(dag);
+
+    // Create arrays of spouses
+    const groupSpouses = (dagRow: Node[]) => {
+      let multiplesSpouses: string[][] = [];
+      let spouses = {};
+
+      for (let i = 0; i < dagRow.length; i++) {
+        const person = dagRow[i];
+        if (person.data.isUnion) {
+          return dagRow;
+        }
+
+        if (
+          !person.data.hasOwnProperty('own_unions') ||
+          person.data?.own_unions.length === 0
+        ) {
+          // Single. create his own group. the key is his id
+          spouses[person.data.id] = [person];
+        } else {
+          // Not single. Create his group if non existent the key is the union
+          const key = person.data.own_unions.sort()[0];
+
+          if (person.data.own_unions.length > 1) {
+            // Have multiple spouses. Mark it to merge them all later
+            multiplesSpouses.push(person.data.own_unions);
+          }
+
+          if (spouses.hasOwnProperty(key)) {
+            spouses[key].push(person);
+          } else {
+            spouses[key] = [person];
+          }
+        }
+      }
+
+      // Merge multiples spouses into the first
+      for (let i = 0; i < multiplesSpouses.length; i++) {
+        const multiple = multiplesSpouses[i];
+        const key = multiplesSpouses[i][0];
+        for (let j = 1; j < multiplesSpouses[i].length; j++) {
+          const otherKey = multiplesSpouses[i][j];
+          spouses[key] = spouses[key].concat(spouses[otherKey]);
+
+          delete spouses[otherKey];
+        }
+      }
+
+      return Object.values(spouses);
+    };
+
+    for (let i = 0; i < dag.length; i++) {
+      let row = dag[i];
+      // Bucket sort
+      // SET UP an array of initially empty "buckets": spouses.
+      // SCATTER each object from the unsorted array into their corresponding buckets.
+      let spouses: any = groupSpouses(row);
+
+      // SORT each bucket individually.
+      if (Array.isArray(spouses[0])) {
+        spouses.sort((a: Node[], b: Node[]) => {
+          return a.length >= b.length ? -1 : 1;
+        });
+      }
+
+      // GATHER items from each bucket in their correct order
+      dag[i] = spouses.flat();
+    }
   }
 
   getNeighbors(node: Node) {

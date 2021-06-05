@@ -105,7 +105,7 @@ export const data = {
       id: 'id13',
       name: 'DanWife',
       birthYear: 1980,
-      ownUnions: ['u6'],
+      own_unions: ['u6'],
     },
     id14: {
       id: 'id14',
