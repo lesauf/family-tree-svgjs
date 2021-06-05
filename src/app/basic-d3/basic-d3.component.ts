@@ -72,29 +72,13 @@ export type Coordinates = {
 };
 
 export type Node = LayoutDagNode<NodeData, string[]> & Coordinates;
-// {
-//   data: {
-//     id: string | number;
-//     birthplace: string;
-//     birthyear: number;
-//     deathplace: string;
-//     deathyear: number;
-//     name: string;
-//     own_unions: any[];
-//     parent_union: string;
-//     isUnion: boolean;
-//   };
-//   // dataChildren: any[];
-//   dataChildren: LinkDatum[];
-//   children: LinkDatum[];
-//   height: any;
-//   inserted_nodes: any[];
-//   inserted_roots: Node[];
-//   neighbors: any[];
-//   visible: boolean;
-//   inserted_connections: any[];
-// };
 
+/**
+ * Family tree display using SVG & D3
+ *
+ * Constraints:
+ * - All children must have two parents
+ */
 @Component({
   selector: 'app-basic-d3',
   templateUrl: './basic-d3.component.html',
@@ -172,7 +156,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
         }
       })
       .layering(d3.layeringSimplex())
-      .decross(d3.decrossOpt())
+      // .decross(d3.decrossOpt())
+      .decross(this.decrossCouples)
       .coord(d3.coordQuad());
 
     // this.layout;
@@ -214,6 +199,29 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     // draw dag
     this.update(this.root);
     // this.update(this.dag);
+  }
+
+  /**
+   *
+   * @param dag
+   */
+  decrossCouples(dag: Node[][]) {
+    for (let i = 0; i < dag.length; i++) {
+      const row = dag[i];
+      row.sort((d1: Node, d2: Node) => {
+        if (
+          d1.data?.own_unions?.sort().join() ===
+          d2.data?.own_unions?.sort().join()
+        ) {
+          // Group couples of the same family
+          return 1;
+        } else {
+          return -1;
+        }
+      });
+    }
+
+    console.log(dag);
   }
 
   getNeighbors(node: Node) {
@@ -363,32 +371,39 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       let path: string;
 
       if (s.hasOwnProperty('data') && !s['data']['isUnion']) {
-        // for starting node add a margin to the top
-        sourceX = s.x + this.x_sep / 10 + this.marginAroundNodes;
-        sourceY = s.y;
+        // for left node add a margin to the top
+        sourceX = s.x;
+        if (s.y > d.y) {
+          // Start line at left for right node
+          sourceY = s.y - this.y_sep - this.marginAroundNodes;
+        } else {
+          // Start line from right of left node
+          sourceY = s.y + this.y_sep + this.marginAroundNodes;
+        }
 
-        // Angular lines
+        // Straight horizontal line between spouses
         path = `M ${sourceY} ${sourceX}
-                L ${sourceY} ${destX}
-                  ${destY} ${destX}`;
+                L ${destY} ${sourceX}`;
       }
       if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
         // for destination node add a margin to the bottom
         destX = d.x - this.x_sep / 10 - this.marginAroundNodes;
         destY = d.y;
 
+        sourceX = d.x - this.x_sep + this.marginAroundNodes / 3;
+
         // Angular lines
         path = `M ${sourceY} ${sourceX}
-                L ${destY} ${sourceX}
+                L ${sourceY} ${s.x}
+                  ${destY} ${s.x}
                   ${destY} ${destX}`;
       }
 
       // Curved lines
-      // let path = `M ${sourceY} ${sourceX}
+      // path = `M ${sourceY} ${sourceX}
       //   C ${(sourceY + destY) / 2} ${sourceX},
       //     ${(sourceY + destY) / 2} ${destX},
       //     ${destY} ${destX}`;
-      // ,
 
       return path;
     };

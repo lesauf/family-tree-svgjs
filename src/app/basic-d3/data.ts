@@ -34,7 +34,7 @@ export const data = {
       name: 'Dan',
       birthyear: 1926,
       deathyear: 2009,
-      own_unions: [],
+      own_unions: ['u6'],
       parent_union: 'u1',
       birthplace: 'den Haag',
       deathplace: 'Derince',
@@ -107,6 +107,12 @@ export const data = {
       birthYear: 1980,
       ownUnions: ['u6'],
     },
+    id14: {
+      id: 'id14',
+      name: 'HeinzWife',
+      birthyear: 1970,
+      own_unions: ['u5'],
+    },
   },
   unions: {
     u1: {
@@ -131,7 +137,7 @@ export const data = {
     },
     u5: {
       id: 'u5',
-      partner: ['id8'],
+      partner: ['id8', 'id14'],
       children: ['id12'],
     },
     u6: {
@@ -156,6 +162,7 @@ export const data = {
     ['u4', 'id10'],
     ['u1', 'id11'],
     ['id8', 'u5'],
+    ['id14', 'u5'],
     ['u5', 'id12'],
     ['id13', 'u6'],
     ['id4', 'u6'],
