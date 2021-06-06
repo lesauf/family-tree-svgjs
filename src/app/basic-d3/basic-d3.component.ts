@@ -101,7 +101,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
   duration = 750;
   x_sep = 120;
   y_sep = 50;
-  marginAroundNodes: number = 15;
+  nodesSpacing: number = 30;
+  margingAroundNodes: number = 3;
   marginAfter;
   unionYSep = 50;
   unionXSep = 100;
@@ -151,8 +152,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
         } else {
           // Here set the dimensions of each node
           return [
-            this.x_sep + this.marginAroundNodes,
-            this.y_sep + this.marginAroundNodes,
+            this.x_sep + this.nodesSpacing,
+            this.y_sep + this.nodesSpacing,
           ];
         }
       })
@@ -191,7 +192,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     );
 
     this.root.visible = true;
-    this.root.neighbors = this.getNeighbors(this.root);
+    // this.root.neighbors = this.getNeighbors(this.root);
     this.root.x0 = this.screen_height / 2;
     this.root.y0 = this.screen_width / 2;
     // overwrite dag root nodes to set only one
@@ -207,59 +208,77 @@ export class BasicD3Component implements AfterViewInit, OnInit {
    * @param dag
    */
   decrossCouples(dag: Node[][]) {
-    console.log(dag);
+    // Create a hashmap of dag array
+    let dagHashMap: { [id: string]: Node } = {};
 
     // Create arrays of spouses
     const groupSpouses = (dagRow: Node[]) => {
       let multiplesSpouses: string[][] = [];
-      let spouses = {};
+      let spouses: Map<string, Node[]> = new Map();
 
-      for (let i = 0; i < dagRow.length; i++) {
-        const person = dagRow[i];
-        if (person.data.isUnion) {
-          return dagRow;
+      if (dagRow[0].data.isUnion) {
+        // Unions
+        for (let i = 0; i < dagRow.length; i++) {
+          const union = dagRow[i];
+          // add the unions to the nodes hashmap
+          dagHashMap[union.data.id] = union;
         }
+        return dagRow;
+      } else {
+        // Spouses
+        for (let i = 0; i < dagRow.length; i++) {
+          const person = dagRow[i];
+          // add the person to the nodes hashmap
+          dagHashMap[person.data.id] = person;
 
-        if (
-          !person.data.hasOwnProperty('own_unions') ||
-          person.data?.own_unions.length === 0
-        ) {
-          // Single. create his own group. the key is his id
-          spouses[person.data.id] = [person];
-        } else {
-          // Not single. Create his group if non existent the key is the union
-          const key = person.data.own_unions.sort()[0];
-
-          if (person.data.own_unions.length > 1) {
-            // Have multiple spouses. Mark it to merge them all later
-            multiplesSpouses.push(person.data.own_unions);
-          }
-
-          if (spouses.hasOwnProperty(key)) {
-            spouses[key].push(person);
+          if (
+            !person.data.hasOwnProperty('own_unions') ||
+            person.data?.own_unions.length === 0
+          ) {
+            // Single. create his own group. the key is his id
+            spouses.set(person.data.id, [person]);
           } else {
-            spouses[key] = [person];
+            // Not single. Create his group if non existent the key is the union
+            const key = person.data.own_unions.sort()[0];
+
+            if (person.data.own_unions.length > 1) {
+              // Have multiple spouses. Mark it to merge them all later
+              multiplesSpouses.push(person.data.own_unions);
+            }
+
+            if (spouses.has(key)) {
+              let existingPartners = spouses.get(key);
+              existingPartners.push(person);
+
+              spouses.set(key, existingPartners);
+            } else {
+              spouses.set(key, [person]);
+            }
           }
         }
-      }
 
-      // Merge multiples spouses into the first
-      for (let i = 0; i < multiplesSpouses.length; i++) {
-        const multiple = multiplesSpouses[i];
-        const key = multiplesSpouses[i][0];
-        for (let j = 1; j < multiplesSpouses[i].length; j++) {
-          const otherKey = multiplesSpouses[i][j];
-          spouses[key] = spouses[key].concat(spouses[otherKey]);
+        // Merge multiples spouses into the first
+        for (let i = 0; i < multiplesSpouses.length; i++) {
+          const multiple = multiplesSpouses[i];
+          const key = multiplesSpouses[i][0];
 
-          delete spouses[otherKey];
+          for (let j = 1; j < multiplesSpouses[i].length; j++) {
+            const otherKey = multiplesSpouses[i][j];
+            const allPartners = spouses.get(key).concat(spouses.get(otherKey));
+            spouses.set(key, allPartners);
+
+            spouses.delete(otherKey);
+          }
         }
-      }
 
-      return Object.values(spouses);
+        return [...spouses.values()];
+      }
     };
 
+    let unionsOrder: string[][] = [];
     for (let i = 0; i < dag.length; i++) {
       let row = dag[i];
+
       // Bucket sort
       // SET UP an array of initially empty "buckets": spouses.
       // SCATTER each object from the unsorted array into their corresponding buckets.
@@ -267,9 +286,22 @@ export class BasicD3Component implements AfterViewInit, OnInit {
 
       // SORT each bucket individually.
       if (Array.isArray(spouses[0])) {
+        // Spouses sorted by the one with many partners
         spouses.sort((a: Node[], b: Node[]) => {
-          return a.length >= b.length ? -1 : 1;
+          return a.length > b.length ? -1 : 1;
         });
+
+        // Get the order of their unions to sort the next layer
+        unionsOrder[i] = spouses
+          .map((s) => {
+            return s.map((p) => p.data?.own_unions).flat();
+          })
+          .flat();
+        // Deduplicate the unions order
+        unionsOrder[i] = [...new Set(unionsOrder[i])];
+      } else {
+        // For unions, we set them in the order of the unionsOrder[i-1]
+        spouses = unionsOrder[i - 1].map((unionId) => dagHashMap[unionId]);
       }
 
       // GATHER items from each bucket in their correct order
@@ -411,70 +443,8 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     let links = this.dag.links();
 
     // *********************************************
-    //             Node section
+    //             Nodes section
     // *********************************************
-
-    // Creates a curved (diagonal) path from parent to the child nodes
-    let diagonal = (s: Node | Coordinates, d: Node | Coordinates) => {
-      // By default the link start from the moddle of the node/union
-      let sourceX = s.x;
-      let sourceY = s.y;
-      let destX = d.x;
-      let destY = d.y;
-      let path: string;
-
-      if (s.hasOwnProperty('data') && !s['data']['isUnion']) {
-        // for left node add a margin to the top
-        sourceX = s.x;
-        if (s.y > d.y) {
-          // Start line at left for right node
-          sourceY = s.y - this.y_sep - this.marginAroundNodes;
-        } else {
-          // Start line from right of left node
-          sourceY = s.y + this.y_sep + this.marginAroundNodes;
-        }
-
-        // Straight horizontal line between spouses
-        path = `M ${sourceY} ${sourceX}
-                L ${destY} ${sourceX}`;
-      }
-      if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
-        // for destination node add a margin to the bottom
-        destX = d.x - this.x_sep / 10 - this.marginAroundNodes;
-        destY = d.y;
-
-        sourceX = d.x - this.x_sep + this.marginAroundNodes / 3;
-
-        // Angular lines
-        path = `M ${sourceY} ${sourceX}
-                L ${sourceY} ${s.x}
-                  ${destY} ${s.x}
-                  ${destY} ${destX}`;
-      }
-
-      // Curved lines
-      // path = `M ${sourceY} ${sourceX}
-      //   C ${(sourceY + destY) / 2} ${sourceX},
-      //     ${(sourceY + destY) / 2} ${destX},
-      //     ${destY} ${destX}`;
-
-      return path;
-    };
-
-    // Toggle unions, children, partners on click.
-    let click = (event: any, d: Node) => {
-      // do nothing if node is union
-      if (d.data.isUnion) return;
-      // // uncollapse if there are uncollapsed unions / children / partners
-      // if (this.is_extendable(d)) {
-      //   this.uncollapse(d);
-      // } else {
-      //   // collapse if fully uncollapsed
-      //   this.collapse(d);
-      // }
-      // this.update(d);
-    };
-
     // Update the nodes...
     let node = this.g.selectAll('g.node').data(nodes, (d: any, index) => {
       if (!d.data.id) {
@@ -497,9 +467,10 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .append('g')
       .attr('class', 'node')
       .attr('transform', (d: any) => {
-        return 'translate(' + d.y + ',' + d.x + ')';
+        return 'translate(' + d.y + ',' + d.x + ')'; // parent position
+        // return 'translate(' + source.y0 + ',' + source.x0 + ')'; // his own position
       })
-      .on('click', click)
+      // .on('click', this.expandNode)
       // .on('mouseover', tip.show)
       // .on('mouseout', tip.hide)
       .attr('visible', true);
@@ -557,12 +528,12 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     var nodeUpdate = nodeEnter.merge(node);
 
     // Transition to the proper position for the node
-    // nodeUpdate
-    //   .transition()
-    //   .duration(this.duration)
-    //   .attr('transform', function (d: any) {
-    //     return 'translate(' + d.y + ',' + d.x + ')';
-    //   });
+    nodeUpdate
+      .transition()
+      .duration(this.duration)
+      .attr('transform', function (d: any) {
+        return 'translate(' + d.y + ',' + d.x + ')';
+      });
 
     // Hide the union nodes
     nodeUpdate
@@ -610,7 +581,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .attr('class', 'link')
       .attr('d', (d: any) => {
         let o = { x: source.x0, y: source.y0 };
-        return diagonal(o, o);
+        return this.drawPath(o, o);
       });
 
     // UPDATE
@@ -621,7 +592,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .transition()
       .duration(this.duration)
       .attr('d', (d: LayoutLink<Node>) => {
-        return diagonal(d.source, d.target);
+        return this.drawPath(d.source, d.target);
       });
 
     // Remove any exiting links
@@ -631,7 +602,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .duration(this.duration)
       .attr('d', function (d: any) {
         var o = { x: source.x, y: source.y };
-        return diagonal(o, o);
+        return this.drawPath(o, o);
       })
       .remove();
 
@@ -653,6 +624,77 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       d.y0 = d.y;
     });
   }
+
+  /**
+   * Creates a path from parent to the child nodes
+   * @param s
+   * @param d
+   * @returns SVG path instructions
+   */
+  drawPath(s: Node | Coordinates, d: Node | Coordinates) {
+    // By default the link start from the middle of the node/union
+    let sourceX = s.x;
+    let sourceY = s.y;
+    let destX = d.x;
+    let destY = d.y;
+    let path: string;
+
+    // Parent -> union
+    if (s.hasOwnProperty('data') && !s['data']['isUnion']) {
+      // for left node add a margin to the top
+      sourceX = s.x;
+      if (s.y > d.y) {
+        // Start line at left for right node
+        sourceY =
+          s.y - this.y_sep - this.nodesSpacing / 3 - this.margingAroundNodes;
+      } else {
+        // Start line from right of left node
+        sourceY =
+          s.y + this.y_sep + this.nodesSpacing / 3 + this.margingAroundNodes;
+      }
+
+      // Straight horizontal line between spouses
+      path = `M ${sourceY} ${sourceX}
+              L ${destY} ${sourceX}`;
+    }
+    // Union -> Child
+    if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
+      // for destination node add a margin to the bottom
+      destX =
+        d.x - this.x_sep / 10 - this.nodesSpacing / 2 - this.margingAroundNodes;
+      destY = d.y;
+
+      sourceX = d.x - this.x_sep - this.nodesSpacing / 3;
+
+      // Angular lines
+      path = `M ${sourceY} ${sourceX}
+              L ${sourceY} ${s.x}
+                ${destY} ${s.x}
+                ${destY} ${destX}`;
+    }
+
+    // Curved lines
+    // path = `M ${s.y} ${s.x}
+    //   C ${(s.y + d.y) / 2} ${s.x},
+    //     ${(s.y + d.y) / 2} ${d.x},
+    //     ${d.y} ${d.x}`;
+
+    return path;
+  }
+
+  // Toggle unions, children, partners on click.
+  // expandNode(event: any, d: Node) {
+  //   // do nothing if node is union
+  //   if (d.data.isUnion) return;
+  //   // uncollapse if there are uncollapsed unions / children / partners
+  //   if (this.is_extendable(d)) {
+  //     this.uncollapse(d);
+  //   } else {
+  //     // collapse if fully uncollapsed
+  //     this.collapse(d);
+  //   }
+  //   this.update(d);
+  // };
 
   // collapse a node
   // collapse(d: Node) {
