@@ -1,6 +1,7 @@
 import {
   AfterViewInit,
   Component,
+  Input,
   OnInit,
   ViewEncapsulation,
 } from '@angular/core';
@@ -53,7 +54,7 @@ export type LinkDatum = {
   points: any[];
 };
 
-export type NodeData = {
+export type PersonData = {
   id: string;
   birthplace?: string;
   birthyear?: number;
@@ -65,6 +66,12 @@ export type NodeData = {
   isUnion?: boolean;
 };
 
+export type UnionData = {
+  id: string;
+  partner: string[];
+  children: string[];
+};
+
 export type Coordinates = {
   x?: number;
   x0?: number;
@@ -72,10 +79,23 @@ export type Coordinates = {
   y0?: number;
 };
 
-export type Node = LayoutDagNode<NodeData, string[]> & Coordinates;
+export type NodeComputations = {
+  _children?: any[];
+  children?: any[];
+  inserted_nodes?: any[];
+  inserted_roots?: any[];
+  neighbors?: any[];
+  visible?: boolean;
+  inserted_connections?: any[];
+  height?: any;
+};
+
+export type Node = LayoutDagNode<PersonData, string[]> &
+  Coordinates &
+  NodeComputations;
 
 /**
- * Family tree display using SVG & D3
+ * Family tree display using SVG & D3-DAG
  *
  * Constraints:
  * - All children must have two parents
@@ -87,15 +107,22 @@ export type Node = LayoutDagNode<NodeData, string[]> & Coordinates;
   styleUrls: ['./basic-d3.component.scss'],
 })
 export class BasicD3Component implements AfterViewInit, OnInit {
+  @Input() data: {
+    start: string;
+    persons: { [id: string]: PersonData };
+    unions: { [id: string]: UnionData };
+    links: string[][];
+  } = data;
+
   screen_width: any;
   screen_height: any;
   zoom: any;
   layout: SugiyamaOperator<any>;
-  dag: Dag<DagNode<NodeData, string[]>>;
+  dag: Dag<DagNode<PersonData, string[]>>;
   root: any;
   g: any;
   svg: any;
-  all_nodes: LayoutDagNode<NodeData, string[]>[];
+  all_nodes: LayoutDagNode<PersonData, string[]>[];
   // helper variables
   i = 0;
   duration = 750;
@@ -175,13 +202,13 @@ export class BasicD3Component implements AfterViewInit, OnInit {
         : data.unions[n.data.id];
       // n.dataChildren = n.children; // all nodes collapsed by default
       // n.dataChildren = [];
-      // n.children = [];
-      // n.inserted_nodes = [];
-      // n.inserted_roots = [];
-      // n.neighbors = [];
-      // n.visible = true;
-      // n.inserted_connections = [];
-      // n.height = 10;
+      // // n.children = [];
+      n.inserted_nodes = [];
+      n.inserted_roots = [];
+      n.neighbors = [];
+      n.visible = false;
+      n.inserted_connections = [];
+      n.height = 10;
 
       return n;
     });
@@ -192,7 +219,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     );
 
     this.root.visible = true;
-    // this.root.neighbors = this.getNeighbors(this.root);
+    this.root.neighbors = this.getNeighbors(this.root);
     this.root.x0 = this.screen_height / 2;
     this.root.y0 = this.screen_width / 2;
     // overwrite dag root nodes to set only one
@@ -309,132 +336,6 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     }
   }
 
-  getNeighbors(node: Node) {
-    if (node.data.isUnion) {
-      return this.getChildren(node).concat(this.getPartners(node));
-    } else {
-      return this.getOwnUnions(node).concat(this.getParentUnions(node));
-    }
-  }
-
-  getParentUnions(node: Node) {
-    if (node === undefined || node.data.isUnion) {
-      return [];
-    }
-
-    var u_id = node.data.parent_union;
-    if (u_id) {
-      var union = this.all_nodes.find((n: any) => n.data.id == u_id);
-      return [union].filter((u) => u != undefined);
-    } else return [];
-  }
-
-  getParents(node: any) {
-    var parents: any = [];
-    if (node.data.isUnion) {
-      node.data.partner.forEach((p_id: any) =>
-        parents.push(this.all_nodes.find((n: any) => n.data.id == p_id))
-      );
-    } else {
-      var parent_unions = this.getParentUnions(node);
-      parent_unions.forEach(
-        (u) => (parents = parents.concat(this.getParents(u)))
-      );
-    }
-    return parents.filter((p: any) => p != undefined);
-  }
-
-  getOtherPartner(node: any, union_data: any) {
-    var partner_id = union_data.partner.find(
-      (p_id: any) => p_id != node.data.id && p_id != undefined
-    );
-    return this.all_nodes.find((n: any) => n.data.id == partner_id);
-  }
-
-  getPartners(node: any) {
-    var partners: any = [];
-    // return both partners if node argument is a union
-    if (node.data.isUnion) {
-      node.data.partner.forEach((p_id: any) =>
-        partners.push(this.all_nodes.find((n: any) => n.data.id == p_id))
-      );
-    }
-    // return other partner of all unions if node argument is a person
-    else {
-      var own_unions = this.getOwnUnions(node);
-      own_unions.forEach((u: any) => {
-        partners.push(this.getOtherPartner(node, u.data));
-      });
-    }
-    return partners.filter((p: any) => p != undefined);
-  }
-
-  getOwnUnions(node: Node) {
-    if (node.data.isUnion) {
-      return [];
-    }
-
-    let unions: any = [];
-    node.data.own_unions.forEach((u_id: any) =>
-      unions.push(this.all_nodes.find((n: any) => n.data.id == u_id))
-    );
-
-    return unions.filter((u: any) => u !== undefined);
-  }
-
-  getChildren(node: any): LinkDatum[] {
-    let children: LinkDatum[] = [];
-    if (!node.data.isUnion) {
-      children = node.children.concat(node.dataChildren);
-    } else {
-      let own_unions = this.getOwnUnions(node);
-
-      own_unions.forEach(
-        (u: any) => (children = children.concat(this.getChildren(u)))
-      );
-    }
-    // sort children by birth year, filter undefined
-    children = children
-      .filter((c: any) => c != undefined)
-      .sort((a: LinkDatum, b: LinkDatum) =>
-        Math.sign(
-          (this.getBirthYear(a.child) || 0) - (this.getBirthYear(b.child) || 0)
-        )
-      );
-
-    console.log('OWN_UNIONS', children);
-    return children;
-  }
-
-  getBirthYear(node: Node) {
-    return new Date(node.data.birthyear || NaN).getFullYear();
-  }
-
-  getDeathYear(node: any) {
-    return new Date(node.data.deathyear || NaN).getFullYear();
-  }
-
-  find_path(n: any) {
-    let parents = this.getParents(n);
-    let found = false;
-    let result: any = []; // null;
-    parents.forEach((p: any) => {
-      if (p && !found) {
-        if (p.id == 'profile-89285291') {
-          found = true;
-          result = [p, n];
-        } else {
-          result = this.find_path(p);
-          if (result) {
-            found = true;
-            result.push(n);
-          }
-        }
-      }
-    });
-    return result;
-  }
-
   update(source: any) {
     // Assigns the x and y position for the nodes
     let dag_tree = this.layout(this.dag);
@@ -467,10 +368,11 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .append('g')
       .attr('class', 'node')
       .attr('transform', (d: any) => {
-        return 'translate(' + d.y + ',' + d.x + ')'; // parent position
-        // return 'translate(' + source.y0 + ',' + source.x0 + ')'; // his own position
+        return 'translate(' + d.y + ',' + d.x + ')'; // his own position
+        // return 'translate(' + source.y0 + ',' + source.x0 + ')'; // parent position
       })
       // .on('click', this.expandNode)
+      .on('click', this.onPersonClick)
       // .on('mouseover', tip.show)
       // .on('mouseout', tip.hide)
       .attr('visible', true);
@@ -528,12 +430,12 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     var nodeUpdate = nodeEnter.merge(node);
 
     // Transition to the proper position for the node
-    nodeUpdate
-      .transition()
-      .duration(this.duration)
-      .attr('transform', function (d: any) {
-        return 'translate(' + d.y + ',' + d.x + ')';
-      });
+    // nodeUpdate
+    //   .transition()
+    //   .duration(this.duration)
+    //   .attr('transform', function (d: any) {
+    //     return 'translate(' + d.y + ',' + d.x + ')';
+    //   });
 
     // Hide the union nodes
     nodeUpdate
@@ -549,21 +451,21 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       .attr('cursor', 'pointer');
 
     // Remove any exiting nodes
-    var nodeExit = node
-      .exit()
-      .transition()
-      .duration(this.duration)
-      .attr('transform', function (d: any) {
-        return 'translate(' + source.y + ',' + source.x + ')';
-      })
-      .attr('visible', false)
-      .remove();
+    // var nodeExit = node
+    //   .exit()
+    //   .transition()
+    //   .duration(this.duration)
+    //   .attr('transform', function (d: any) {
+    //     return 'translate(' + source.y + ',' + source.x + ')';
+    //   })
+    //   .attr('visible', false)
+    //   .remove();
 
     // On exit reduce the node circles size to 0
-    nodeExit.select('circle').attr('r', 1e-6);
+    // nodeExit.select('circle').attr('r', 1e-6);
 
-    // On exit reduce the opacity of text labels
-    nodeExit.select('text').style('fill-opacity', 1e-6);
+    // // On exit reduce the opacity of text labels
+    // nodeExit.select('text').style('fill-opacity', 1e-6);
 
     // *********************************************
     //             links section
@@ -596,18 +498,19 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       });
 
     // Remove any exiting links
-    var linkExit = link
-      .exit()
-      .transition()
-      .duration(this.duration)
-      .attr('d', function (d: any) {
-        var o = { x: source.x, y: source.y };
-        return this.drawPath(o, o);
-      })
-      .remove();
+    // var linkExit = link
+    //   .exit()
+    //   .transition()
+    //   .duration(this.duration)
+    //   .attr('d', function (d: any) {
+    //     var o = { x: source.x, y: source.y };
+    //     return this.drawPath(o, o);
+    //   })
+    //   .remove();
 
     // expanding a big subgraph moves the entire dag out of the window
     // to prevent this, cancel any transformations in y-direction
+    // Center the graph to the start person
     this.svg
       .transition()
       .duration(this.duration)
@@ -682,167 +585,312 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     return path;
   }
 
-  // Toggle unions, children, partners on click.
-  // expandNode(event: any, d: Node) {
-  //   // do nothing if node is union
-  //   if (d.data.isUnion) return;
-  //   // uncollapse if there are uncollapsed unions / children / partners
-  //   if (this.is_extendable(d)) {
-  //     this.uncollapse(d);
-  //   } else {
-  //     // collapse if fully uncollapsed
-  //     this.collapse(d);
-  //   }
-  //   this.update(d);
-  // };
+  /********************************************
+   *          Helper functions
+   ********************************************/
+  onPersonClick = (event: any, d: Node) => {
+    // do nothing if node is union
+    if (d.data.isUnion) return;
+
+    console.log('Clicked on:', d.data.name);
+  };
+
+  /**
+   * Toggle unions, children, partners on click.
+   * Defined as an arrow function to give access to `this` context
+   * @param event
+   * @param d
+   * @returns
+   */
+  expandNode = (event: any, d: Node) => {
+    // do nothing if node is union
+    if (d.data.isUnion) return;
+    // uncollapse if there are uncollapsed unions / children / partners
+
+    console.log(this.is_extendable(d));
+    if (this.is_extendable(d)) {
+      this.uncollapse(d);
+    } else {
+      // collapse if fully uncollapsed
+      this.collapse(d);
+    }
+    this.update(d);
+  };
 
   // collapse a node
-  // collapse(d: Node) {
-  //   // remove root nodes and circle-connections
-  //   var remove_inserted_root_nodes = (n: Node) => {
-  //     // remove all inserted root nodes
-  //     this.dag['dagRoots'] = this.dag['dagRoots'].filter(
-  //       (c: Node) =>
-  //         n.inserted_roots.find((r) => c.data.id === r.data.id) === undefined
-  //     );
+  collapse(d: Node) {
+    // remove root nodes and circle-connections
+    let remove_inserted_root_nodes = (n: Node) => {
+      console.log('COLLAPSING', n);
+      // remove all inserted root nodes
+      this.dag['dagRoots'] = this.dag['dagRoots'].filter(
+        // this.dag.children = this.dag.children.filter(
+        (c: Node) =>
+          n.inserted_roots.find((r) => c.data.id === r.data.id) !== undefined
+      );
 
-  //     // remove inserted connections
-  //     n.inserted_connections.forEach((arr: [LinkDatum, LinkDatum]) => {
-  //       // check existence to prevent double entries
-  //       // which will cause crashes
-  //       const connectionExist = arr[0].child.children.find(
-  //         (c) => arr[1].child.data.id === c.child.data.id
-  //       );
+      // remove inserted connections
+      n.inserted_connections.forEach((arr: [LinkDatum, LinkDatum]) => {
+        // check existence to prevent double entries
+        // which will cause crashes
+        const connectionExist = arr[0].child.children.find(
+          (c) => arr[1].child.data.id === c.child.data.id
+        );
 
-  //       // if (arr[0].children.includes(arr[1])) {
-  //       if (connectionExist) {
-  //         arr[0].child.dataChildren.push(arr[1]);
-  //         arr[0].child.children.remove(arr[1]);
-  //       }
-  //     });
-  //     // repeat for all inserted nodes
-  //     n.inserted_nodes.forEach(remove_inserted_root_nodes);
-  //   };
-  //   remove_inserted_root_nodes(d);
+        // if (arr[0].children.includes(arr[1])) {
+        if (connectionExist) {
+          arr[0].child.dataChildren.push(arr[1]);
+          arr[0].child.children.remove(arr[1]);
+        }
+      });
+      // repeat for all inserted nodes
+      n.inserted_nodes.forEach(remove_inserted_root_nodes);
+    };
+    remove_inserted_root_nodes(d);
 
-  //   // collapse neighbors which are visible and have been inserted by this node
-  //   var vis_inserted_neighbors = d.neighbors.filter((n: Node) => {
-  //     const isInserted = d.inserted_nodes.find(
-  //       (a: Node) => a.data.id === n.data.id
-  //     );
+    // collapse neighbors which are visible and have been inserted by this node
+    var vis_inserted_neighbors = d.neighbors.filter((n: Node) => {
+      const isInserted = d.inserted_nodes.find(
+        (a: Node) => a.data.id === n.data.id
+      );
 
-  //     return n.visible && isInserted;
-  //     // d.inserted_nodes.includes(n)
-  //   });
-  //   vis_inserted_neighbors.forEach((n: any) => {
-  //     // tag invisible
-  //     n.visible = false;
-  //     // if child, delete connection
-  //     if (d.children.includes(n)) {
-  //       d.dataChildren.push(n);
-  //       d.children.remove(n);
-  //     }
-  //     // if parent, delete connection
-  //     if (n.children.includes(d)) {
-  //       n.dataChildren.push(d);
-  //       n.children.remove(d);
-  //     }
-  //     // if union, collapse the union
-  //     if (n.data.isUnion) {
-  //       this.collapse(n);
-  //     }
-  //     // remove neighbor handle from clicked node
-  //     d.inserted_nodes.remove(n);
-  //   });
-  // }
+      return n.visible && isInserted;
+      // d.inserted_nodes.includes(n)
+    });
+    vis_inserted_neighbors.forEach((n: any) => {
+      // tag invisible
+      n.visible = false;
+      // if child, delete connection
+      if (d.children.includes(n)) {
+        d.dataChildren.push(n);
+        d.children.remove(n);
+      }
+      // if parent, delete connection
+      if (n.children.includes(d)) {
+        n.dataChildren.push(d);
+        n.children.remove(d);
+      }
+      // if union, collapse the union
+      if (n.data.isUnion) {
+        this.collapse(n);
+      }
+      // remove neighbor handle from clicked node
+      d.inserted_nodes.remove(n);
+    });
+  }
 
-  // // uncollapse a node
-  // uncollapse(d: Node, make_roots = false) {
-  //   if (d === undefined) return;
+  // uncollapse a node
+  uncollapse(d: Node, make_roots = false) {
+    if (d === undefined) return;
 
-  //   // neighbor nodes that are already visible (happens when
-  //   // circles occur): make connections, save them to
-  //   // destroy / rebuild on collapse
-  //   let extended_neighbors = d.neighbors.filter((n: any) => n.visible);
-  //   extended_neighbors.forEach((n: any) => {
-  //     // if child, make connection
-  //     const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
-  //     if (isChild) {
-  //       d.inserted_connections.push([d, n]);
-  //     }
-  //     // if parent, make connection
-  //     const isParent = n.dataChildren.find(
-  //       (c) => d.data.id === c.child.data.id
-  //     );
-  //     if (isParent) {
-  //       d.inserted_connections.push([n, d]);
-  //     }
-  //   });
+    // neighbor nodes that are already visible (happens when
+    // circles occur): make connections, save them to
+    // destroy / rebuild on collapse
+    let extended_neighbors = d.neighbors.filter((n: any) => n.visible);
+    extended_neighbors.forEach((n: any) => {
+      // if child, make connection
+      const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
+      if (isChild) {
+        d.inserted_connections.push([d, n]);
+      }
+      // if parent, make connection
+      const isParent = n.dataChildren.find(
+        (c) => d.data.id === c.child.data.id
+      );
+      if (isParent) {
+        d.inserted_connections.push([n, d]);
+      }
+    });
 
-  //   // neighbor nodes that are invisible: make visible, make connections,
-  //   // add root nodes, add to inserted_nodes
-  //   let collapsed_neighbors = d.neighbors.filter((n: any) => !n.visible);
+    // neighbor nodes that are invisible: make visible, make connections,
+    // add root nodes, add to inserted_nodes
+    let collapsed_neighbors = d.neighbors.filter((n: any) => !n.visible);
 
-  //   collapsed_neighbors.forEach((n, index: number) => {
-  //     // collect neighbor data
-  //     n.neighbors = this.getNeighbors(n);
+    collapsed_neighbors.forEach((n, index: number) => {
+      // collect neighbor data
+      n.neighbors = this.getNeighbors(n);
 
-  //     // tag visible
-  //     n.visible = true;
+      // tag visible
+      n.visible = true;
 
-  //     // if child, make connection
-  //     const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
-  //     if (isChild) {
-  //       // d.children.push(n);
-  //       d.children.push(isChild);
-  //       d.dataChildren.remove(n);
-  //     }
+      // if child, make connection
+      const isChild = d.dataChildren.find((c) => n.data.id === c.child.data.id);
+      if (isChild) {
+        // d.children.push(n);
+        d.children.push(isChild);
+        d.dataChildren.remove(n);
+      }
 
-  //     // if parent, make connection
-  //     const isParent = n.dataChildren.find(
-  //       (c) => d.data.id === c.child.data.id
-  //     );
-  //     if (isParent) {
-  //       n.children.push(isParent);
-  //       n.dataChildren.remove(d);
-  //       // insert root nodes if flag is set
-  //       if (make_roots && !d.inserted_roots.includes(n)) {
-  //         d.inserted_roots.push(n);
-  //       }
-  //     }
-  //     // if union, uncollapse the union
-  //     if (n.data.isUnion) {
-  //       this.uncollapse(n, true);
-  //     }
-  //     // save neighbor handle in clicked node
-  //     d.inserted_nodes.push(n);
+      // if parent, make connection
+      const isParent = n.dataChildren.find(
+        (c) => d.data.id === c.child.data.id
+      );
+      if (isParent) {
+        n.children.push(isParent);
+        n.dataChildren.remove(d);
+        // insert root nodes if flag is set
+        if (make_roots && !d.inserted_roots.includes(n)) {
+          d.inserted_roots.push(n);
+        }
+      }
+      // if union, uncollapse the union
+      if (n.data.isUnion) {
+        this.uncollapse(n, true);
+      }
+      // save neighbor handle in clicked node
+      d.inserted_nodes.push(n);
 
-  //     collapsed_neighbors[index] = n; // ??
-  //   });
+      collapsed_neighbors[index] = n; // ??
+    });
 
-  //   // make sure this step is done only once
-  //   if (!make_roots) {
-  //     var add_root_nodes = (n: any) => {
-  //       // add previously inserted root nodes (partners, parents)
-  //       n.inserted_roots.forEach((p: any) => this.dag['dagRoots'].push(p));
+    // make sure this step is done only once
+    if (!make_roots) {
+      var add_root_nodes = (n: any) => {
+        // add previously inserted root nodes (partners, parents)
+        n.inserted_roots.forEach((p: any) => this.dag['dagRoots'].push(p));
 
-  //       // add previously inserted connections (circles)
-  //       n.inserted_connections.forEach((arr: any) => {
-  //         // check existence to prevent double entries
-  //         // which will cause crashes
-  //         if (arr[0].dataChildren.includes(arr[1])) {
-  //           arr[0].children.push(arr[1]);
-  //           arr[0].dataChildren.remove(arr[1]);
-  //         }
-  //       });
-  //       // repeat with all inserted nodes
-  //       n.inserted_nodes.forEach(add_root_nodes);
-  //     };
-  //     add_root_nodes(d);
-  //   }
-  // }
+        // add previously inserted connections (circles)
+        n.inserted_connections.forEach((arr: any) => {
+          // check existence to prevent double entries
+          // which will cause crashes
+          if (arr[0].dataChildren.includes(arr[1])) {
+            arr[0].children.push(arr[1]);
+            arr[0].dataChildren.remove(arr[1]);
+          }
+        });
+        // repeat with all inserted nodes
+        n.inserted_nodes.forEach(add_root_nodes);
+      };
+      add_root_nodes(d);
+    }
+  }
 
-  // is_extendable(node: Node) {
-  //   return node.neighbors.filter((n: any) => !n.visible).length > 0;
-  // }
+  is_extendable(node: Node) {
+    return node.neighbors.filter((n: any) => !n.visible).length > 0;
+  }
+
+  getNeighbors(node: Node) {
+    if (node.data.isUnion) {
+      return this.getChildren(node).concat(this.getPartners(node));
+    } else {
+      return this.getOwnUnions(node).concat(this.getParentUnions(node));
+    }
+  }
+
+  getParentUnions(node: Node) {
+    if (node === undefined || node.data.isUnion) {
+      return [];
+    }
+
+    var u_id = node.data.parent_union;
+    if (u_id) {
+      var union = this.all_nodes.find((n: any) => n.data.id == u_id);
+      return [union].filter((u) => u != undefined);
+    } else return [];
+  }
+
+  getParents(node: any) {
+    var parents: any = [];
+    if (node.data.isUnion) {
+      node.data.partner.forEach((p_id: any) =>
+        parents.push(this.all_nodes.find((n: any) => n.data.id == p_id))
+      );
+    } else {
+      var parent_unions = this.getParentUnions(node);
+      parent_unions.forEach(
+        (u) => (parents = parents.concat(this.getParents(u)))
+      );
+    }
+    return parents.filter((p: any) => p != undefined);
+  }
+
+  getOtherPartner(node: any, union_data: any) {
+    var partner_id = union_data.partner.find(
+      (p_id: any) => p_id != node.data.id && p_id != undefined
+    );
+    return this.all_nodes.find((n: any) => n.data.id == partner_id);
+  }
+
+  getPartners(node: any) {
+    var partners: any = [];
+    // return both partners if node argument is a union
+    if (node.data.isUnion) {
+      node.data.partner.forEach((p_id: any) =>
+        partners.push(this.all_nodes.find((n: any) => n.data.id == p_id))
+      );
+    }
+    // return other partner of all unions if node argument is a person
+    else {
+      var own_unions = this.getOwnUnions(node);
+      own_unions.forEach((u: any) => {
+        partners.push(this.getOtherPartner(node, u.data));
+      });
+    }
+    return partners.filter((p: any) => p != undefined);
+  }
+
+  getOwnUnions(node: Node) {
+    if (node.data.isUnion) {
+      return [];
+    }
+
+    let unions: any = [];
+    node.data.own_unions.forEach((u_id: any) =>
+      unions.push(this.all_nodes.find((n: any) => n.data.id == u_id))
+    );
+
+    return unions.filter((u: any) => u !== undefined);
+  }
+
+  getChildren(node: Node): LinkDatum[] {
+    let children: LinkDatum[] = [];
+    if (!node.data.isUnion) {
+      children = node.children.concat(node.dataChildren);
+    } else {
+      let own_unions = this.getOwnUnions(node);
+
+      own_unions.forEach(
+        (u: any) => (children = children.concat(this.getChildren(u)))
+      );
+    }
+    // sort children by birth year, filter undefined
+    children = children
+      .filter((c: any) => c != undefined)
+      .sort((a: LinkDatum, b: LinkDatum) =>
+        Math.sign(
+          (this.getBirthYear(a.child) || 0) - (this.getBirthYear(b.child) || 0)
+        )
+      );
+
+    return children;
+  }
+
+  getBirthYear(node: Node) {
+    return new Date(node.data.birthyear || NaN).getFullYear();
+  }
+
+  getDeathYear(node: any) {
+    return new Date(node.data.deathyear || NaN).getFullYear();
+  }
+
+  find_path(n: any) {
+    let parents = this.getParents(n);
+    let found = false;
+    let result: any = []; // null;
+    parents.forEach((p: any) => {
+      if (p && !found) {
+        if (p.id == 'profile-89285291') {
+          found = true;
+          result = [p, n];
+        } else {
+          result = this.find_path(p);
+          if (result) {
+            found = true;
+            result.push(n);
+          }
+        }
+      }
+    });
+    return result;
+  }
 }

@@ -2,11 +2,8 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 import { BasicD3Component } from './basic-d3/basic-d3.component';
 import { BasicGraphComponent } from './basic-graph/basic-graph.component';
-import { CssFtComponent } from './css-ft/css-ft.component';
 import { CssComponent } from './css/css.component';
-import { DlacremeSvgComponent } from './dlacreme-svg/dlacreme-svg.component';
 import { DlacremeComponent } from './dlacreme/dlacreme.component';
-import { FamilyTreeComponent } from './family-tree/family-tree.component';
 import { NgxGraphOrgTreeComponent } from './ngx-graph-org-tree/ngx-graph-org-tree.component';
 
 const routes: Routes = [
@@ -19,14 +16,6 @@ const routes: Routes = [
     component: CssComponent,
   },
   {
-    path: 'css-ft',
-    component: CssFtComponent,
-  },
-  {
-    path: 'family',
-    component: FamilyTreeComponent,
-  },
-  {
     path: 'basic',
     component: BasicGraphComponent,
   },
@@ -37,10 +26,6 @@ const routes: Routes = [
   {
     path: 'dlacreme',
     component: DlacremeComponent,
-  },
-  {
-    path: 'dlacreme-svg',
-    component: DlacremeSvgComponent,
   },
 ];
 
