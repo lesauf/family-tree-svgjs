@@ -62,7 +62,7 @@ export type PersonData = {
   deathyear?: number;
   name?: string;
   own_unions?: any[];
-  parent_union?: string;
+  parent_union?: string[];
   isUnion?: boolean;
 };
 
@@ -577,10 +577,10 @@ export class BasicD3Component implements AfterViewInit, OnInit {
     }
 
     // Curved lines
-    // path = `M ${s.y} ${s.x}
-    //   C ${(s.y + d.y) / 2} ${s.x},
-    //     ${(s.y + d.y) / 2} ${d.x},
-    //     ${d.y} ${d.x}`;
+    path = `M ${s.y} ${s.x}
+      C ${(s.y + d.y) / 2} ${d.x},
+        ${(s.y + d.y) / 2} ${s.x},
+       ${d.y} ${d.x}`;
 
     return path;
   }
@@ -782,7 +782,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       return [];
     }
 
-    var u_id = node.data.parent_union;
+    var u_id = node.data.parent_union[0];
     if (u_id) {
       var union = this.all_nodes.find((n: any) => n.data.id == u_id);
       return [union].filter((u) => u != undefined);
