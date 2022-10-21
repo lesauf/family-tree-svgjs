@@ -560,6 +560,7 @@ export class BasicD3Component implements AfterViewInit, OnInit {
       path = `M ${sourceY} ${sourceX}
               L ${destY} ${sourceX}`;
     }
+
     // Union -> Child
     if (d.hasOwnProperty('data') && !d['data']['isUnion']) {
       // for destination node add a margin to the bottom
