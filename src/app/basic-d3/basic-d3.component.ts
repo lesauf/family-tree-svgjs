@@ -6,7 +6,6 @@ import {
   ViewEncapsulation,
 } from '@angular/core';
 import * as d3_base from 'd3';
-import 'd3-tip';
 import * as d3dag from 'd3-dag';
 import { data } from './data';
 import {
